@@ -15,13 +15,13 @@ from flask import request
 
 
 client = MongoClient()
-db = client.generlledgerdb
+db = client.generalledgerdb
 collection = db.generalledger
-app = Flask(__name__)
+# app = Flask(__name__)
 
 #Genearal ledger Transaction
 @app.route('/gltransfer',methods=['POST'])
-def add_post():
+def gl():
     bank_name = request.json['bank_name']
     branch_name = request.json['branch_name']
     from_account = request.json['from_account']
@@ -36,17 +36,18 @@ def add_post():
 
     if from_account and to_account and transferd_amount and description and bank_name and branch_name and request.method   == 'POST':
         # to fetch the previous collection balance and add that with transfered amount
-        cursor = list(collection.find().sort('_id', -1).limit(100))
-        print(cursor)
-        for i in cursor:
-            print(i)
-            #balance=i.balance
+        cursor = list(db.generalledger.find().sort('transaction_date', -1).limit(1))
+        balance = ''
+        for r in cursor:
+            balance = r['balance']
+
+        print('balance', balance)
         if from_account == to_account:
             transaction_type = "DP"
             credit_amount = transferd_amount
             debit_amount = 0
-            #balance = transferd_amount+ balance
-            balance=transferd_amount
+            balance = int(transferd_amount)+ int(balance)
+
 
             gl = Generalledger.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
                                               to_account=to_account,
@@ -56,18 +57,25 @@ def add_post():
             gl.save()
             return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
         else:
-            debit_amount = transferd_amount
-            transaction_type = "TX"
-            credit_amount = 0
-        balance = transferd_amount
+            if(transferd_amount<=balance):#checking whether the transfered amount is less than the actual balance
+                debit_amount = transferd_amount
+                transaction_type = "TX"
+                credit_amount = 0
+                balance = int(balance)- int(transferd_amount) #updated balance
 
-        gl = Generalledger.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
-                                            credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
-        gl.save()
-        hqvault=HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
-                                            credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
-        hqvault.save()
-        return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
+                gl = Generalledger.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
+                                                    credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
+                gl.save() #save in generalledger
+                debit_amount = 0
+                transaction_type = "DP"
+                credit_amount = transferd_amount
+                balance = int(balance)+ int(transferd_amount) #updated balance
+                hqvault=HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
+                                                    credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
+                hqvault.save() #saves in hq vault
+                return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
+            else:
+                return (jsonify({'message': 'Insufficient Balance'}))
 
 
 
@@ -75,19 +83,8 @@ def add_post():
 @app.route('/glreport', methods=['GET'])
 
 def glreport():
-    cursor = collection.find().sort('_id',-1).limit(100)
-    print('cursor',cursor) #printing <pymongo.cursor.Cursor object at 0x000001E775B84610>
-    data=[]
-
-    for i in cursor: #note-------->its not going inside the loop
-        res=i.balance
-        print(res)
-
 
     report = Generalledger.objects.filter()
-    print(report,'report------->')
-    if not report:
-        abort(400)
     result = []
     for u in report:
         report_data = {}
@@ -121,16 +118,18 @@ def hqTransfer():
 
     if from_account and to_account and transferd_amount and description and bank_name and branch_name and request.method   == 'POST':
         # to fetch the previous collection balance and add that with transfered amount
-        cursor = list(collection.find().sort('_id', -1).limit(100))
-        print(cursor)
-        for i in cursor:
-            print(i)
-        balance = transferd_amount
+        cursor = list(db.hq_vault.find().sort('transaction_date', -1).limit(1))
+
+        balance = ''
+        for r in cursor:
+            balance = r['balance']
+
+        #if from and to account is equal user can deposit in his own account
         if from_account == to_account:
             transaction_type = "DP"
             credit_amount = transferd_amount
             debit_amount = 0
-
+            balance=int(balance)+ int(transferd_amount)
             hqvault = HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
                                         to_account=to_account,
                                         credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
@@ -138,36 +137,37 @@ def hqTransfer():
                                         description=description)
             hqvault.save()
         else:
-            debit_amount = transferd_amount
-            transaction_type = "TX"
-            credit_amount = 0
+            if(transferd_amount<=balance):#checking whether the transfered amount is less than the actual balance
+                debit_amount = transferd_amount
+                transaction_type = "TX"
+                credit_amount = 0
+                balance=int(balance)- int(transferd_amount) #updated balance
+                hqvault = HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
+                                                credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
 
-            hqvault = HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
-                                            credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
-            hqvault.save()
-            transaction_type = "DP"
-            vault = Vault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
-                                         to_account=to_account,
-                                         credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
-                                         transaction_date=transaction_date, transaction_type=transaction_type,
-                                         description=description)
-            vault.save()
-            return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
+                hqvault.save() #save in hq_vault
+
+                transaction_type = "DP"
+                debit_amount = 0
+                credit_amount = transferd_amount
+                balance = int(balance)+ int(transferd_amount) #updated balance
+                vault = Vault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
+                                             to_account=to_account,
+                                             credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
+                                             transaction_date=transaction_date, transaction_type=transaction_type,
+                                             description=description)
+                vault.save() #saves in vault
+
+                return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
+            else:
+                return (jsonify({'message': 'Insufficient Balance'}))
 
 
 #head branch Transacton report
 def hqreport():
-    cursor = collection.find().sort('_id',-1).limit(100)
-    print('cursor',cursor) #printing <pymongo.cursor.Cursor object at 0x000001E775B84610>
-    data=[]
-
-    for i in cursor: #note-------->its not going inside the loop
-        res=i.balance
-        print(res)
-
 
     report = HqVault.objects.filter()
-    print(report,'report------->')
+
     if not report:
         abort(400)
     result = []
@@ -202,51 +202,39 @@ def VaultTransfer():
 
     if from_account and to_account and transferd_amount and description and bank_name and branch_name and request.method   == 'POST':
         # to fetch the previous collection balance and add that with transfered amount
-        cursor = list(collection.find().sort('_id', -1).limit(100))
-        print(cursor)
-        for i in cursor:
-            print(i)
-        balance = transferd_amount
-        if from_account == to_account:
-            transaction_type = "DP"
-            credit_amount = transferd_amount
-            debit_amount = 0
+        cursor = list(collection.find().sort('transaction_date', -1).limit(1))
 
-            vault = Vault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
-                                        to_account=to_account,
-                                        credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
-                                        transaction_date=transaction_date, transaction_type=transaction_type,
-                                        description=description)
-            vault.save()
-        else:
+        balance = ''
+        for r in cursor:
+            balance = r['balance']
+        if transferd_amount <=balance:
             debit_amount = transferd_amount
             transaction_type = "TX"
             credit_amount = 0
+            balance=int(balance)- int(transferd_amount) #updated balance
+            vault = HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
+                                           to_account=to_account,
+                                           credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
+                                           transaction_date=transaction_date, transaction_type=transaction_type,
+                                           description=description)
+            vault.save() #saves in vault
 
-            vault = HqVault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,to_account=to_account,
-                                            credit_amount=credit_amount,debit_amount=debit_amount,balance=balance,transaction_date=transaction_date,transaction_type=transaction_type,description=description)
-            vault.save()
+            debit_amount = transferd_amount
             transaction_type = "DP"
+            credit_amount = transferd_amount
+            balance = int(balance)+ int(transferd_amount) #updated balance
             hqvault = Vault.objects.create(bank_name=bank_name, branch_name=branch_name, from_account=from_account,
-                                         to_account=to_account,
-                                         credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
-                                         transaction_date=transaction_date, transaction_type=transaction_type,
-                                         description=description)
-            hqvault.save()
+                                           to_account=to_account,
+                                           credit_amount=credit_amount, debit_amount=debit_amount, balance=balance,
+                                           transaction_date=transaction_date, transaction_type=transaction_type,
+                                           description=description)
+            hqvault.save() #saves in hqvauult
             return (jsonify({'message': 'Amount is Transfered Sucessfully'}))
+
 
 
 #child branch Transacton report
 def hqreport():
-    cursor = collection.find().sort('_id',-1).limit(100)
-    print('cursor',cursor) #printing <pymongo.cursor.Cursor object at 0x000001E775B84610>
-    data=[]
-
-    for i in cursor: #note-------->its not going inside the loop
-        res=i.balance
-        print(res)
-
-
     report = HqVault.objects.filter()
     print(report,'report------->')
     if not report:
@@ -270,5 +258,5 @@ def hqreport():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
 
