@@ -3,25 +3,24 @@ from flask_mongoengine import MongoEngine
 from mongoengine import *
 
 
-
-
 class SavingAccount(Document):
     name = StringField()
-    bank_id = StringField(primary_key=True)
-    branch_id = StringField(primary_key=True)
+    bank_id = StringField()
+    branch_id = StringField()
     account_no = StringField()
-    customer_id = IntField(primary_key=True)
-    account_type_id = IntField(primary_key=True)
-    currency_id = IntField(primary_key=True)
-    mini_balance_id=IntField(primary_key=True)
-    interest_id=IntField(primary_key=True)
-    transaction_id=StringField(primary_key=True)
+    customer_id = IntField()
+    account_type_id = IntField()
+    currency_id = IntField()
+    mini_balance_id=IntField()
+    interest_id=IntField()
+    transaction_id=StringField()
     transaction_mode=StringField()
     net_balance=IntField()
-    actual_balance=StringField()
+    actual_balance=IntField()
     is_active=BooleanField()
     def to_json(self):
-        return {
+        return\
+            {
             "_id": str(self.pk),
             "name": self.name,
             "bank_id": self.bank_id,
@@ -35,7 +34,21 @@ class SavingAccount(Document):
             "net_balance": self.net_balance,
             "actual_balance":self.actual_balance,
             "is_active":self.is_active,
-            "public_id": self.public_id
-        }
 
-disconnect(alias='generalledgerdb')
+
+            }
+
+class SavingInterest(Document):
+    sav_acc_id = ReferenceField(SavingAccount)
+    interest_charge = IntField()
+    reason = StringField()
+    charged_on = DateTimeField()
+    def to_json(self):
+        return {
+            "_id": str(self.pk),
+            "Saving Account Id": self.sav_acc_id,
+            "Interest Charge": self.interest_charge,
+            "Reason": self.reason,
+            "Charged On": self.charged_on
+               }
+#disconnect(alias='savingaccountdb')
